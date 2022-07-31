@@ -171,7 +171,7 @@ function parse_migration(string $migration_path): array {
 }
 
 function get_migration_path(int $version) {
-	$files = glob("./migration/patch_{$version}_*");
+	$files = glob("./migration/patch_{$version}_*.sql.maggy");
 	if (count($files) != 1) {
 		if (count($files) == 0) {
 			echo "Nothing to migrate; already at version $version.\n";
