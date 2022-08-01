@@ -216,8 +216,10 @@ foreach ($args as $i => $arg) {
 	$matches = [];
 	if (preg_match('/^((?<scope>[a-z]+):)?(?<command>[a-z]+)$/', $arg, $matches)) {
 		$commands[] = $arg;
-	} elseif (preg_match('/^--[a-z]+|-[a-z]$/', $arg)) {
-		$flags[] = $arg;
+	} elseif (preg_match('/^--(?<flag>[a-z]+)(=(?<val>[a-z]*))?$/', $arg, $matches)) {
+		$flags[$matches['flag']] = $matches['val'] ?? '';
+	} elseif (preg_match('/^-(?<flag>[a-z])(=(?<val>[a-z]*))?$/', $arg, $matches)) {
+		$flags[$matches['flag']] = $matches['val'] ?? '';
 	} else {
 		$errors[] = ['pos' => $i, 'err' => $arg];
 	}
