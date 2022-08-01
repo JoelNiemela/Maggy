@@ -214,6 +214,38 @@ switch ($command) {
 	case 'help':
 		help();
 		break;
+	case 'setup':
+		$has_config = file_exists('./config.ini');
+		$has_migrations = file_exists('./migration');
+
+		if ($has_config && $has_migrations) {
+			echo "Maggy is already active.\n";
+			break;
+		}
+
+		if (!$has_config) {
+			$config_file = fopen('./config.ini', 'w');
+
+			$default_config = <<<STR
+			; Example Maggy configuration:
+			; [dbconfig]
+			; host = "localhost"
+			; SQL username
+			; user = "MyUser"
+			; Password for user (empty string for 'NO')
+			; password = "password"
+			; Name of the database you wish Maggy to use
+			; db_name = "ExampleDB"
+			STR;
+
+			fwrite($config_file, $default_config);
+		}
+
+		if (!$has_migrations) {
+			mkdir('./migration');
+		}
+
+		break;
 	case 'db:version':
 		$testing = true;
 
