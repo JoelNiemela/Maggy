@@ -207,8 +207,24 @@ function get_version(): int {
 	return $update['version'];
 }
 
-$command = $argv[1];
-$args = array_slice($argv, 2);
+$args = array_slice($argv, 1);
+$commands = [];
+$flags    = [];
+$errors   = [];
+
+foreach ($args as $i => $arg) {
+	$matches = [];
+	if (preg_match('/^((?<scope>[a-z]+):)?(?<command>[a-z]+)$/', $arg, $matches)) {
+		$commands[] = $arg;
+	} elseif (preg_match('/^--[a-z]+|-[a-z]$/', $arg)) {
+		$flags[] = $arg;
+	} else {
+		$errors[] = [$i => $arg];
+	}
+}
+
+$command = $commands[0] ?? '';
+$args = array_slice($commands, 1);
 
 switch ($command) {
 	case 'help':
