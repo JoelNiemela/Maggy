@@ -51,6 +51,37 @@ function help() {
 	echo "\thelp — show this message\n";
 }
 
+function setup() {
+	$has_config = file_exists('./config.ini');
+	$has_migrations = file_exists('./migration');
+
+	if ($has_config && $has_migrations) {
+		die("Maggy is already active.\n");
+	}
+
+	if (!$has_config) {
+		$config_file = fopen('./config.ini', 'w');
+
+		$default_config = <<<STR
+		; Example Maggy configuration:
+		; [dbconfig]
+		; host = "localhost"
+		; SQL username
+		; user = "MyUser"
+		; Password for user (empty string for 'NO')
+		; password = "password"
+		; Name of the database you wish Maggy to use
+		; db_name = "ExampleDB"
+		STR;
+
+		fwrite($config_file, $default_config);
+	}
+
+	if (!$has_migrations) {
+		mkdir('./migration');
+	}
+}
+
 function maggy_segment(string $segment, array $args, &$output_segment, &$output): void {
 	switch ($segment) {
 		case 'Up':
@@ -219,6 +250,34 @@ function rollback(bool $view = false) {
 	shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 }
 
+function test() {
+	$testing = true;
+
+	$db_schema = dump_db_definitions();
+	$db_data   = dump_db_data();
+
+	migrate();
+	rollback();
+
+	$new_db_schema = dump_db_definitions();
+	$new_db_data   = dump_db_data();
+
+	$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
+	if ($new_db_schema != $db_schema) {
+		echo "Error: Part of the @Up segment not handled in @Down segments.\n\n";
+		system("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options")."\n\n\n";
+	}
+
+	if ($new_db_data != $db_data) {
+		echo "Error: Data loss or corruption detected. Try adding `--#IgnoreData`.\n\n";
+		system("diff <(echo ".escapeshellarg($db_data).") <(echo ".escapeshellarg($new_db_data).") $diff_options")."\n\n\n";
+	}
+
+	if ($new_db_data == $db_data && $new_db_schema == $db_schema) {
+		echo "Success!\n";
+	} 
+}
+
 function get_version(): int {
 	global $database;
 
@@ -286,36 +345,7 @@ switch ($command) {
 		help();
 		break;
 	case 'setup':
-		$has_config = file_exists('./config.ini');
-		$has_migrations = file_exists('./migration');
-
-		if ($has_config && $has_migrations) {
-			echo "Maggy is already active.\n";
-			break;
-		}
-
-		if (!$has_config) {
-			$config_file = fopen('./config.ini', 'w');
-
-			$default_config = <<<STR
-			; Example Maggy configuration:
-			; [dbconfig]
-			; host = "localhost"
-			; SQL username
-			; user = "MyUser"
-			; Password for user (empty string for 'NO')
-			; password = "password"
-			; Name of the database you wish Maggy to use
-			; db_name = "ExampleDB"
-			STR;
-
-			fwrite($config_file, $default_config);
-		}
-
-		if (!$has_migrations) {
-			mkdir('./migration');
-		}
-
+		setup();
 		break;
 	case 'db:version':
 		$testing = true;
@@ -323,32 +353,7 @@ switch ($command) {
 		echo get_version()."\n";
 		break;
 	case 'test':
-		$testing = true;
-
-		$db_schema = dump_db_definitions();
-		$db_data   = dump_db_data();
-
-		migrate();
-		rollback();
-
-		$new_db_schema = dump_db_definitions();
-		$new_db_data   = dump_db_data();
-
-		$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
-		if ($new_db_schema != $db_schema) {
-			echo "Error: Part of the @Up segment not handled in @Down segments.\n\n";
-			system("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options")."\n\n\n";
-		}
-
-		if ($new_db_data != $db_data) {
-			echo "Error: Data loss or corruption detected. Try adding `--#IgnoreData`.\n\n";
-			system("diff <(echo ".escapeshellarg($db_data).") <(echo ".escapeshellarg($new_db_data).") $diff_options")."\n\n\n";
-		}
-
-		if ($new_db_data == $db_data && $new_db_schema == $db_schema) {
-			echo "Success!\n";
-		} 
-
+		test();
 		break;
 	case 'migrate':
 		$testing = true;
