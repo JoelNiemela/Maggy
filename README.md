@@ -1,6 +1,6 @@
 ## Maggy — An SQL Migration Tool ##
 
-Maggy is a tool written in PHP to facilitate the making and applying of migrations to SQL databases.
+Maggy is a tool written in PHP to facilitate the making and applying of migrations for SQL databases.
 
 ## Installation ##
 
@@ -11,7 +11,7 @@ In order to install Maggy:
 
 ## Maggy files ##
 
-In Maggy, each migration is described by a maggy file. Maggy files consist of vanilla SQL along with Maggy macros that enables `maggy migrate` and `maggy rollback`.
+In Maggy, each migration is described by a Maggy file. Maggy files consist of vanilla SQL with Maggy macros that enable `maggy migrate` and `maggy rollback`.
 
 Maggy files end with the `.sql.maggy` file extension;
 
@@ -37,7 +37,7 @@ There are three types of Macros in Maggy:
   - Introduce new segments, such as `--@Up` and `--@Down`.
   - Declare the context of a file with the `--@Version` macro.
 - Attribute macros (`--#Attribute`):
-  - Modify the behaviour of SQL queries or other macros.
+  - Modify the behavior of SQL queries or other macros.
 - Command macros (`--!Command`):
   - Enable Maggy for a database with the `--!Maggy` macro.
   - Shorthand for SQL queries.
@@ -53,4 +53,4 @@ Every Maggy file must start with the `--@Version` macro.
 - `--@Down`
   - Initiates the `Down` segment; all subsequent lines (until the next segment macro) belong to the `Down` segment.
 - `--!Maggy`
-  - Enables Maggy support for the database. Yyour first migration for a database with Maggy should use this command.
+  - Enables Maggy support for the database. The first migration for a database with Maggy should use this command.
