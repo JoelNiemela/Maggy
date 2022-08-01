@@ -233,6 +233,12 @@ $command = $commands[0] ?? '';
 $args = array_slice($commands, 1);
 
 switch ($command) {
+	case '':
+		if (isset($flags['help']) || isset($flags['h'])) {
+			help();
+			break;
+		}
+		break;
 	case 'help':
 		help();
 		break;
