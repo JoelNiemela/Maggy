@@ -219,8 +219,12 @@ foreach ($args as $i => $arg) {
 	} elseif (preg_match('/^--[a-z]+|-[a-z]$/', $arg)) {
 		$flags[] = $arg;
 	} else {
-		$errors[] = [$i => $arg];
+		$errors[] = ['pos' => $i, 'err' => $arg];
 	}
+}
+
+foreach ($errors as $error) {
+	echo "Error: couldn't parse argument #{$error['pos']} '{$error['err']}'\n";
 }
 
 $command = $commands[0] ?? '';
