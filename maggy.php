@@ -188,6 +188,37 @@ function get_migration_path(int $version) {
 	return $files[0];
 }
 
+function migrate(bool $view = false) {
+	$version = get_version();
+
+	$migration = parse_migration(get_migration_path($version));
+
+	$sql = $migration['global'] . $migration['up'];
+
+	if ($view) return $sql;
+
+	$config = load_config();
+	shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+}
+
+function rollback(bool $view = false) {
+	$version = get_version();
+
+	if ($version == 0) {
+		echo "Can't rollback: already at earliest version.\n";
+		return;
+	}
+
+	$migration = parse_migration(get_migration_path($version - 1));
+
+	$sql = $migration['global'] . $migration['down'];
+
+	if ($view) return $sql;
+	
+	$config = load_config();
+	shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+}
+
 function get_version(): int {
 	global $database;
 
@@ -205,6 +236,18 @@ function get_version(): int {
 	if ($update == null) return 0;
 
 	return $update['version'];
+}
+
+function dump_db_definitions() {
+	$config = load_config();
+	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
+	return shell_exec("mysqldump --no-data --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+}
+
+function dump_db_data() {
+	$config = load_config();
+	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
+	return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
 }
 
 $args = array_slice($argv, 1);
@@ -282,49 +325,42 @@ switch ($command) {
 	case 'test':
 		$testing = true;
 
-		$version = get_version();
+		$db_schema = dump_db_definitions();
+		$db_data   = dump_db_data();
 
-		$migration = parse_migration(get_migration_path($version));
-		print_r($migration);
+		migrate();
+		rollback();
+
+		$new_db_schema = dump_db_definitions();
+		$new_db_data   = dump_db_data();
+
+		$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
+		if ($new_db_schema != $db_schema) {
+			echo "Error: Part of the @Up segment not handled in @Down segments.\n\n";
+			system("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options")."\n\n\n";
+		}
+
+		if ($new_db_data != $db_data) {
+			echo "Error: Data loss or corruption detected. Try adding `--#IgnoreData`.\n\n";
+			system("diff <(echo ".escapeshellarg($db_data).") <(echo ".escapeshellarg($new_db_data).") $diff_options")."\n\n\n";
+		}
+
+		if ($new_db_data == $db_data && $new_db_schema == $db_schema) {
+			echo "Success!\n";
+		} 
+
 		break;
 	case 'migrate':
 		$testing = true;
 		$view = ($args[0] ?? '') == 'view';
 
-		$version = get_version();
-
-		$migration = parse_migration(get_migration_path($version));
-
-		$sql = $migration['global'] . $migration['up'];
-
-		if ($view) {
-			echo $sql;
-		} else {
-			$config = load_config();
-			shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
-		}
+		echo migrate($view);
 		break;
 	case 'rollback':
 		$testing = true;
 		$view = ($args[0] ?? '') == 'view';
 
-		$version = get_version();
-
-		if ($version == 0) {
-			echo "Can't rollback: already at earliest version.\n";
-			break;
-		}
-
-		$migration = parse_migration(get_migration_path($version - 1));
-
-		$sql = $migration['global'] . $migration['down'];
-
-		if ($view) {
-			echo $sql;
-		} else {
-			$config = load_config();
-			shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
-		}	
+		echo rollback($view);
 		break;
 	default:
 		die("Unknown command `$command`. Type `maggy help` for more information.\n");
