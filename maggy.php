@@ -1,10 +1,6 @@
 #!/usr/bin/env php
 <?php
 
-if ($argc < 2) {
-	die("Expected a command. Type `maggy help` for more information.\n");
-}
-
 function db_config(): array {
 	$config = parse_ini_file('./config.ini', true);
 	if (isset($config['config_link'])) {
@@ -307,6 +303,10 @@ function dump_db_data() {
 	$config = load_config();
 	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
 	return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+}
+
+if ($argc < 2) {
+	die("Expected a command. Type `maggy help` for more information.\n");
 }
 
 $args = array_slice($argv, 1);
