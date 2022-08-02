@@ -175,9 +175,9 @@ function maggy_macro(string $macro, array $args, &$output): void {
 }
 
 function parse_args(string $args, string $head): array {
-	if (preg_match('/^(\s(?:"[^"]+"|\w+))*\s*$/', $args)) {
+	if (preg_match('/^(\s(?:"[^"]*"|\w+))*\s*$/', $args)) {
 		$matches;
-		preg_match_all('/"[^"]+"|\w+/', $args, $matches);
+		preg_match_all('/"[^"]*"|\w+/', $args, $matches);
 		return $matches[0];
 	} else {
 		echo "Syntax Error: Invalid argument list in `$head$args`. Type `maggy help syntax` for more information.\n";
@@ -226,6 +226,37 @@ function get_migration_path(int $version) {
 	}
 
 	return $files[0];
+}
+
+function parse_diff(string $diff_raw): array {
+	$lines_raw = explode("\n", $diff_raw);
+	$lines = array_map(fn($e) => substr($e, 2), $lines_raw);
+	$diff = implode("\n", $lines);
+
+	// remove conditional-execution tokens.
+	$diff = preg_replace("~(?<=;|^)\W*/\*.*?\*/\W*;~", "", $diff);
+
+	// remove comments
+	$diff = preg_replace("/(?<=^|\n)(.*)?--.*/", "$1", $diff);
+	$diff = preg_replace("~/\*.*?\*/~", "", $diff);
+
+	$diff = str_replace("\n", " ", $diff);
+
+	// split on semicolon
+	$matches;
+	preg_match_all('/(`[^`]*`|\'[^\']*\'|"[^"]*"|[^;])+/', $diff, $matches);
+	$stms = $matches[0];
+
+	$hints = [];
+	foreach ($stms as $stm) {
+		$matches;
+		if (preg_match("/^\s*CREATE TABLE `(?<name>[^`]+)`/", $stm, $matches)) {
+			$name = $matches['name'];
+			$hints[] = "Table `$name` was created in --@Up, but not droped in --@Down.";
+		}
+	}
+
+	return $hints;
 }
 
 function migrate(Database $database, bool $view = false) {
@@ -277,13 +308,20 @@ function test() {
 
 	$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
 	if ($new_db_schema != $db_schema) {
-		echo "Error: Part of the @Up segment not handled in @Down segments.\n\n";
-		system("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options")."\n\n\n";
+		echo "Error: Part of the --@Up segment not handled in the --@Down segments.\n\n";
+		$diff = shell_exec("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options");
+		echo $diff."\n";
+
+		$hints = parse_diff($diff);
+
+		foreach ($hints as $hint) {
+			echo "\nHint:\n$hint\n";
+		}
 	}
 
 	if ($new_db_data != $db_data) {
 		echo "Error: Data loss or corruption detected. Try adding `--#IgnoreData`.\n\n";
-		system("diff <(echo ".escapeshellarg($db_data).") <(echo ".escapeshellarg($new_db_data).") $diff_options")."\n\n\n";
+		system("diff <(echo ".escapeshellarg($db_data).") <(echo ".escapeshellarg($new_db_data).") $diff_options");
 	}
 
 	if ($new_db_data == $db_data && $new_db_schema == $db_schema) {
