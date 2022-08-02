@@ -1,6 +1,22 @@
 #!/usr/bin/env php
 <?php
 
+class Database {
+	public $sql;
+	public $config;
+
+	public function __construct($config) {
+		$this->config = $config;
+
+		$this->sql = new mysqli(
+			$config['host'],
+			$config['user'],
+			$config['password'],
+			$config['db_name']
+		);
+	}
+}
+
 function db_config(): array {
 	$config = parse_ini_file('./config.ini', true);
 	if (isset($config['config_link'])) {
@@ -19,27 +35,26 @@ function test_db_config(): array {
 	return $config;
 }
 
-$testing = false;
-function load_config(): array {
-	global $testing;
+function load_test_db() {
+	$database = connect_database(db_config());
 
-	if ($testing) {
-		return test_db_config();
-	} else {
-		return db_config();
-	}
+	$db_dump = dump_db_all($database);
+
+	$test_database = connect_database(test_db_config());
+	$config = $test_database->config;
+
+	$result = $test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
+	do {
+		$test_database->sql->store_result();
+	} while ($test_database->sql->next_result());
+
+	shell_exec("echo ".escapeshellarg($db_dump)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+
+	return $test_database;
 }
 
-$database;
 function connect_database($config) {
-	global $database;
-
-	$database = new mysqli(
-		$config['host'],
-		$config['user'],
-		$config['password'],
-		$config['db_name']
-	);
+	return new Database($config);
 }
 
 function help() {
@@ -78,7 +93,7 @@ function setup() {
 	}
 }
 
-function maggy_segment(string $segment, array $args, &$output_segment, &$output): void {
+function maggy_segment(string $segment, array $args, &$output_segment, &$output, $db_name): void {
 	switch ($segment) {
 		case 'Up':
 			$output_segment = 'up';
@@ -92,13 +107,11 @@ function maggy_segment(string $segment, array $args, &$output_segment, &$output)
 				break;
 			}
 
-			$db_config = load_config();
-
 			$version = $args[0];
 			$description = $args[1];
 
 			$version_global = <<<SQL
-			USE {$db_config['db_name']};
+			USE $db_name;
 			SQL;
 
 			$version_up = <<<SQL
@@ -172,7 +185,7 @@ function parse_args(string $args, string $head): array {
 	}
 }
 
-function parse_migration(string $migration_path): array {
+function parse_migration(string $migration_path, string $db_name): array {
 	$lines = file($migration_path);
 	$segment = 'global';
 	$output = ['global' => '', 'up' => '', 'down' => ''];
@@ -181,7 +194,7 @@ function parse_migration(string $migration_path): array {
 		$args = [];
 		if (preg_match('/--@(?<segment>\w+)(?<args>.*)$/', $line, $args)) {
 			$segment_args = parse_args($args['args'], "--@{$args['segment']}");
-			maggy_segment($args['segment'], $segment_args, $segment, $output);
+			maggy_segment($args['segment'], $segment_args, $segment, $output, $db_name);
 		} elseif (preg_match('/--#(?<attribute>\w+)(?<args>.*)$/', $line, $args)) {
 			$attribute_args = parse_args($args['args'], "--#{$args['attribute']}");
 			$attributes[] = maggy_attribute($args['attribute'], $attribute_args);
@@ -215,48 +228,52 @@ function get_migration_path(int $version) {
 	return $files[0];
 }
 
-function migrate(bool $view = false) {
-	$version = get_version();
+function migrate(Database $database, bool $view = false): int {
+	$version = get_version($database);
 
-	$migration = parse_migration(get_migration_path($version));
+	$db_name = $database->config['db_name'];
+	$migration = parse_migration(get_migration_path($version), $db_name);
 
 	$sql = $migration['global'] . $migration['up'];
 
 	if ($view) return $sql;
 
-	$config = load_config();
-	shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+	$config = $database->config;
+
+	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 }
 
-function rollback(bool $view = false) {
-	$version = get_version();
+function rollback(Database $database, bool $view = false) {
+	$version = get_version($database);
 
 	if ($version == 0) {
 		echo "Can't rollback: already at earliest version.\n";
 		return;
 	}
 
-	$migration = parse_migration(get_migration_path($version - 1));
+	$db_name = $database->config['db_name'];
+	$migration = parse_migration(get_migration_path($version - 1), $db_name);
 
 	$sql = $migration['global'] . $migration['down'];
 
 	if ($view) return $sql;
-	
-	$config = load_config();
-	shell_exec("echo \"".addslashes($sql)."\" | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+
+	$config = $database->config;
+
+	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 }
 
 function test() {
-	$testing = true;
+	$database = load_test_db();
 
-	$db_schema = dump_db_definitions();
-	$db_data   = dump_db_data();
+	$db_schema = dump_db_definitions($database);
+	$db_data   = dump_db_data($database);
 
-	migrate();
-	rollback();
+	migrate($database);
+	rollback($database);
 
-	$new_db_schema = dump_db_definitions();
-	$new_db_data   = dump_db_data();
+	$new_db_schema = dump_db_definitions($database);
+	$new_db_data   = dump_db_data($database);
 
 	$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
 	if ($new_db_schema != $db_schema) {
@@ -274,14 +291,12 @@ function test() {
 	} 
 }
 
-function get_version(): int {
-	global $database;
-
-	connect_database(load_config());
+function get_version(Database $database): int {
+	$db_name = $database->config['db_name'];
 
 	// Temporarily turn of error reporting, and use return code to check if table exists.
 	mysqli_report(MYSQLI_REPORT_OFF);
-	$result = $database->query("SELECT * FROM maggy_db_update ORDER BY version DESC LIMIT 1;");
+	$result = $database->sql->query("SELECT * FROM $db_name.maggy_db_update ORDER BY version DESC LIMIT 1;");
 	mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 	if ($result === false) return 0;
@@ -293,14 +308,20 @@ function get_version(): int {
 	return $update['version'];
 }
 
-function dump_db_definitions() {
-	$config = load_config();
+function dump_db_all(Database $database) {
+	$config = $database->config;
+	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
+	return shell_exec("mysqldump --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+}
+
+function dump_db_definitions(Database $database) {
+	$config = $database->config;
 	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
 	return shell_exec("mysqldump --no-data --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
 }
 
-function dump_db_data() {
-	$config = load_config();
+function dump_db_data(Database $database) {
+	$config = $database->config;
 	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
 	return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
 }
@@ -347,25 +368,42 @@ switch ($command) {
 	case 'setup':
 		setup();
 		break;
-	case 'db:version':
-		$testing = true;
+	case 'dump':
+		$database = connect_database(db_config());
 
-		echo get_version()."\n";
+		echo dump_db_all($database)."\n";
+		break;
+	case 'test:dump':
+		$database = load_test_db();
+
+		echo dump_db_all($database)."\n";
+		break;
+	case 'test:version':
+		$database = load_test_db();
+
+		echo get_version($database)."\n";
+		break;
+	case 'db:version':
+		$database = connect_database(db_config());
+
+		echo get_version($database)."\n";
 		break;
 	case 'test':
 		test();
 		break;
 	case 'migrate':
-		$testing = true;
+		$database = connect_database(db_config());
+
 		$view = ($args[0] ?? '') == 'view';
 
-		echo migrate($view);
+		echo migrate($database, $view);
 		break;
 	case 'rollback':
-		$testing = true;
+		$database = connect_database(db_config());
+
 		$view = ($args[0] ?? '') == 'view';
 
-		echo rollback($view);
+		echo rollback($database, $view);
 		break;
 	default:
 		die("Unknown command `$command`. Type `maggy help` for more information.\n");
