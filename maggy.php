@@ -228,31 +228,34 @@ function get_migration_path(int $version) {
 	return $files[0];
 }
 
-function parse_diff(string $diff_raw): array {
-	$lines_raw = explode("\n", $diff_raw);
-	$lines = array_map(fn($e) => substr($e, 2), $lines_raw);
-	$diff = implode("\n", $lines);
-
+function cull_diff(string $diff): string {
 	// remove conditional-execution tokens.
-	$diff = preg_replace("~(?<=;|^)\W*/\*.*?\*/\W*;~", "", $diff);
+	return preg_replace("~(?<=^|\n)(\+|-) \W*/\*.*?\*/\W*;.*\n?~", "", $diff);
+}
 
-	// remove comments
-	$diff = preg_replace("/(?<=^|\n)(.*)?--.*/", "$1", $diff);
-	$diff = preg_replace("~/\*.*?\*/~", "", $diff);
+function parse_diff(string $diff, string $diff_down): array {
+	/**
+	 * Takes two argument: $diff_raw and $diff_down
+	 *
+	 * $diff: The diff between before and after running the test.
+	 * $diff_down: The diff between before and after running the
+	 * rollback part of the test.
+	 */
 
-	$diff = str_replace("\n", " ", $diff);
-
-	// split on semicolon
-	$matches;
-	preg_match_all('/(`[^`]*`|\'[^\']*\'|"[^"]*"|[^;])+/', $diff, $matches);
-	$stms = $matches[0];
+	$lines = explode("\n", $diff);
 
 	$hints = [];
-	foreach ($stms as $stm) {
+	foreach ($lines as $line) {
 		$matches;
-		if (preg_match("/^\s*CREATE TABLE `(?<name>[^`]+)`/", $stm, $matches)) {
+		if (preg_match("/^\+ CREATE TABLE `(?<name>[^`]+)`/", $line, $matches)) {
 			$name = $matches['name'];
-			$hints[] = "Table `$name` was created in --@Up, but not droped in --@Down.";
+			if (preg_match("/(^|\n)\+ CREATE TABLE `$name`/", $diff_down)) {
+				// If the table was created in the --@Down segment:
+				$hints[] = "New table `$name` was created in --@Down.";
+			} else {
+				// If the table was created in the --@Up segment:
+				$hints[] = "Table `$name` was created in --@Up, but not droped in --@Down.";
+			}
 		}
 	}
 
@@ -301,6 +304,10 @@ function test(): bool {
 	$db_data   = dump_db_data($database);
 
 	migrate($database);
+
+	$migrate_db_schema = dump_db_definitions($database);
+	$migrate_db_data   = dump_db_data($database);
+
 	rollback($database);
 
 	$new_db_schema = dump_db_definitions($database);
@@ -308,11 +315,14 @@ function test(): bool {
 
 	$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
 	if ($new_db_schema != $db_schema) {
-		echo "Error: Part of the --@Up segment not handled in the --@Down segments.\n\n";
-		$diff = shell_exec("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options");
-		echo $diff."\n";
+		echo "Error: Part of --@Up segment not handled in --@Down segments.\n\n";
 
-		$hints = parse_diff($diff);
+		$diff = shell_exec("diff <(echo ".escapeshellarg($db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options") ?? "";
+		echo cull_diff($diff)."\n";
+
+		$diff_down = shell_exec("diff <(echo ".escapeshellarg($migrate_db_schema).") <(echo ".escapeshellarg($new_db_schema).") $diff_options") ?? "";
+
+		$hints = parse_diff($diff, $diff_down);
 
 		foreach ($hints as $hint) {
 			echo "\nHint:\n$hint\n";
