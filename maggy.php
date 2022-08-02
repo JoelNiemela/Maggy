@@ -211,7 +211,15 @@ function parse_migration(string $migration_path, string $db_name): array {
 }
 
 function get_migration_path(int $version) {
-	$files = glob("./migration/patch_{$version}_*.sql.maggy");
+	$dir = glob("./migration/*");
+	$files = array_values(
+		array_filter(
+			$dir,
+			fn($f) =>
+				preg_match("/patch_$version(_.*?)?\.sql\.maggy$/", $f)
+		)
+	);
+
 	if (count($files) != 1) {
 		if (count($files) == 0) {
 			echo "Nothing to migrate; already at version $version.\n";
@@ -251,10 +259,30 @@ function parse_diff(string $diff, string $diff_down): array {
 			$name = $matches['name'];
 			if (preg_match("/(^|\n)\+ CREATE TABLE `$name`/", $diff_down)) {
 				// If the table was created in the --@Down segment:
-				$hints[] = "New table `$name` was created in --@Down.";
+				$hints[] = <<<STR
+				New table `$name` was created in --@Down.
+				STR;
 			} else {
 				// If the table was created in the --@Up segment:
-				$hints[] = "Table `$name` was created in --@Up, but not droped in --@Down.";
+				$hints[] = <<<STR
+				Table `$name` was created in --@Up, but not droped in --@Down.
+				STR;
+			}
+		} elseif (preg_match("/^- CREATE TABLE `(?<name>[^`]+)`/", $line, $matches)) {
+			$name = $matches['name'];
+			if (preg_match("/(^|\n)- CREATE TABLE `$name`/", $diff_down)) {
+				// If the table was dropped in the --@Down segment:
+				$hints[] = <<<STR
+				Table `$name` created before migration was droped in --@Down.
+				STR;
+			} else {
+				// If the table was dropped in the --@Up segment:
+				$hints[] = <<<STR
+				Dropped table `$name` was not re-created in --@Down.
+
+					If this is a breaking change, try adding --#Breaking.
+					Type `maggy help --#Breaking` for more informataion.
+				STR;
 			}
 		}
 	}
@@ -325,7 +353,7 @@ function test(): bool {
 		$hints = parse_diff($diff, $diff_down);
 
 		foreach ($hints as $hint) {
-			echo "\nHint:\n$hint\n";
+			echo "\nHint: $hint\n";
 		}
 	}
 

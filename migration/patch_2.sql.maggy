@@ -1,0 +1,6 @@
+--@Version 3 ""
+
+--@Up
+DROP TABLE user;
+
+--@Down
