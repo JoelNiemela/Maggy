@@ -228,7 +228,7 @@ function get_migration_path(int $version) {
 	return $files[0];
 }
 
-function migrate(Database $database, bool $view = false): int {
+function migrate(Database $database, bool $view = false) {
 	$version = get_version($database);
 
 	$db_name = $database->config['db_name'];
