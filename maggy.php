@@ -294,7 +294,7 @@ function rollback(Database $database, bool $view = false) {
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 }
 
-function test() {
+function test(): bool {
 	$database = load_test_db();
 
 	$db_schema = dump_db_definitions($database);
@@ -326,7 +326,10 @@ function test() {
 
 	if ($new_db_data == $db_data && $new_db_schema == $db_schema) {
 		echo "Success!\n";
-	} 
+		return true;
+	}
+
+	return false;
 }
 
 function get_version(Database $database): int {
@@ -430,9 +433,11 @@ switch ($command) {
 		test();
 		break;
 	case 'migrate':
-		$database = connect_database(db_config());
-
 		$view = ($args[0] ?? '') == 'view';
+
+		if (!$view && !test()) break;
+
+		$database = connect_database(db_config());
 
 		echo migrate($database, $view);
 		break;
