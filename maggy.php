@@ -52,7 +52,7 @@ class Database {
     }
 }
 
-function db_config(): array {
+function load_db_config(): array {
 	$config = parse_ini_file('./config.ini', true);
 	if (isset($config['config_link'])) {
 		return parse_ini_file($config['config_link']['src']);
@@ -63,19 +63,23 @@ function db_config(): array {
 	}
 }
 
-function test_db_config(): array {
-	$config = db_config();
+function database(): Database {
+    return new Database(load_db_config());
+}
+
+function test_database(): Database {
+	$config = load_db_config();
 	$config['db_name'] = 'Maggy'.$config['db_name'];
 
-	return $config;
+    return new Database($config);
 }
 
 function load_test_db() {
-	$database = connect_database(db_config());
+	$database = database();
 
 	$db_dump = $database->dump_db_all();
 
-	$test_database = connect_database(test_db_config());
+	$test_database = test_database();
 	$config = $test_database->config;
 
 	$result = $test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
@@ -86,10 +90,6 @@ function load_test_db() {
 	shell_exec("echo ".escapeshellarg($db_dump)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 
 	return $test_database;
-}
-
-function connect_database($config) {
-	return new Database($config);
 }
 
 function help() {
@@ -448,7 +448,7 @@ switch ($command) {
 		setup();
 		break;
 	case 'dump':
-		$database = connect_database(db_config());
+		$database = database();
 
 		echo $database->dump_db_all()."\n";
 		break;
@@ -463,7 +463,7 @@ switch ($command) {
 		echo $database->get_version()."\n";
 		break;
 	case 'db:version':
-		$database = connect_database(db_config());
+		$database = database();
 
 		echo $database->get_version()."\n";
 		break;
@@ -475,12 +475,12 @@ switch ($command) {
 
 		if (!$view && !test()) break;
 
-		$database = connect_database(db_config());
+		$database = database();
 
 		echo migrate($database, $view);
 		break;
 	case 'rollback':
-		$database = connect_database(db_config());
+		$database = database();
 
 		$view = ($args[0] ?? '') == 'view';
 
