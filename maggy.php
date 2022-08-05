@@ -15,6 +15,41 @@ class Database {
 			$config['db_name']
 		);
 	}
+
+    public function get_version(): int {
+        $db_name = $this->config['db_name'];
+
+        // Temporarily turn of error reporting, and use return code to check if table exists.
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $result = $this->sql->query("SELECT * FROM $db_name.maggy_db_update ORDER BY version DESC LIMIT 1;");
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+        if ($result === false) return 0;
+
+        $update = mysqli_fetch_assoc($result);
+
+        if ($update == null) return 0;
+
+        return $update['version'];
+    }
+
+    public function dump_db_all() {
+        $config = $this->config;
+        $password = $config['password'] != '' ? "-p={$config['password']}" : '';
+        return shell_exec("mysqldump --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+    }
+
+    public function dump_db_definitions() {
+        $config = $this->config;
+        $password = $config['password'] != '' ? "-p={$config['password']}" : '';
+        return shell_exec("mysqldump --no-data --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+    }
+
+    public function dump_db_data() {
+        $config = $this->config;
+        $password = $config['password'] != '' ? "-p={$config['password']}" : '';
+        return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+    }
 }
 
 function db_config(): array {
@@ -38,7 +73,7 @@ function test_db_config(): array {
 function load_test_db() {
 	$database = connect_database(db_config());
 
-	$db_dump = dump_db_all($database);
+	$db_dump = $database->dump_db_all();
 
 	$test_database = connect_database(test_db_config());
 	$config = $test_database->config;
@@ -291,7 +326,7 @@ function parse_diff(string $diff, string $diff_down): array {
 }
 
 function migrate(Database $database, bool $view = false) {
-	$version = get_version($database);
+	$version = $database->get_version();
 
 	$db_name = $database->config['db_name'];
 	$migration = parse_migration(get_migration_path($version), $db_name);
@@ -306,7 +341,7 @@ function migrate(Database $database, bool $view = false) {
 }
 
 function rollback(Database $database, bool $view = false) {
-	$version = get_version($database);
+	$version = $database->get_version();
 
 	if ($version == 0) {
 		echo "Can't rollback: already at earliest version.\n";
@@ -328,18 +363,18 @@ function rollback(Database $database, bool $view = false) {
 function test(): bool {
 	$database = load_test_db();
 
-	$db_schema = dump_db_definitions($database);
-	$db_data   = dump_db_data($database);
+	$db_schema = $database->dump_db_definitions();
+	$db_data   = $database->dump_db_data();
 
 	migrate($database);
 
-	$migrate_db_schema = dump_db_definitions($database);
-	$migrate_db_data   = dump_db_data($database);
+	$migrate_db_schema = $database->dump_db_definitions();
+	$migrate_db_data   = $database->dump_db_data();
 
 	rollback($database);
 
-	$new_db_schema = dump_db_definitions($database);
-	$new_db_data   = dump_db_data($database);
+	$new_db_schema = $database->dump_db_definitions();
+	$new_db_data   = $database->dump_db_data();
 
 	$diff_options = "--new-line-format='+ %l\n' --old-line-format='- %l\n' --unchanged-line-format=''";
 	if ($new_db_schema != $db_schema) {
@@ -368,41 +403,6 @@ function test(): bool {
 	}
 
 	return false;
-}
-
-function get_version(Database $database): int {
-	$db_name = $database->config['db_name'];
-
-	// Temporarily turn of error reporting, and use return code to check if table exists.
-	mysqli_report(MYSQLI_REPORT_OFF);
-	$result = $database->sql->query("SELECT * FROM $db_name.maggy_db_update ORDER BY version DESC LIMIT 1;");
-	mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-
-	if ($result === false) return 0;
-
-	$update = mysqli_fetch_assoc($result);
-
-	if ($update == null) return 0;
-
-	return $update['version'];
-}
-
-function dump_db_all(Database $database) {
-	$config = $database->config;
-	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
-	return shell_exec("mysqldump --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
-}
-
-function dump_db_definitions(Database $database) {
-	$config = $database->config;
-	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
-	return shell_exec("mysqldump --no-data --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
-}
-
-function dump_db_data(Database $database) {
-	$config = $database->config;
-	$password = $config['password'] != '' ? "-p={$config['password']}" : '';
-	return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
 }
 
 if ($argc < 2) {
@@ -450,22 +450,22 @@ switch ($command) {
 	case 'dump':
 		$database = connect_database(db_config());
 
-		echo dump_db_all($database)."\n";
+		echo $database->dump_db_all()."\n";
 		break;
 	case 'test:dump':
 		$database = load_test_db();
 
-		echo dump_db_all($database)."\n";
+		echo $database->dump_db_all()."\n";
 		break;
 	case 'test:version':
 		$database = load_test_db();
 
-		echo get_version($database)."\n";
+		echo $database->get_version()."\n";
 		break;
 	case 'db:version':
 		$database = connect_database(db_config());
 
-		echo get_version($database)."\n";
+		echo $database->get_version()."\n";
 		break;
 	case 'test':
 		test();
