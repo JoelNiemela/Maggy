@@ -15,6 +15,28 @@ class Database {
 		);
 	}
 
+    public static function db(): Database {
+        return new Database(Database::load_db_config());
+    }
+
+    public static function test_db(): Database {
+        $database = Database::db();
+
+        $db_dump = $database->dump_db_all();
+
+        $test_database = new Database(Database::load_test_db_config());
+        $config = $test_database->config;
+
+        $test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
+        do {
+            $test_database->sql->store_result();
+        } while ($test_database->sql->next_result());
+
+        shell_exec("echo ".escapeshellarg($db_dump)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+
+        return $test_database;
+    }
+
     public function get_version(): int {
         $db_name = $this->config['db_name'];
 
@@ -48,5 +70,23 @@ class Database {
         $config = $this->config;
         $password = $config['password'] != '' ? "-p={$config['password']}" : '';
         return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+    }
+
+    private static function load_db_config(): array {
+        $config = parse_ini_file('./config.ini', true);
+        if (isset($config['config_link'])) {
+            return parse_ini_file($config['config_link']['src']);
+        } elseif (isset($config['dbconfig'])) {
+            return $config['dbconfig'];
+        } else {
+            die("Error in config.ini: 'config_link' or 'dbconfig' segment required.\n");
+        }
+    }
+
+    private static function load_test_db_config(): array {
+        $config = Database::load_db_config();
+        $config['db_name'] = 'Maggy'.$config['db_name'];
+
+        return $config;
     }
 }

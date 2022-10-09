@@ -3,46 +3,6 @@
 
 require 'Database.php';
 
-function load_db_config(): array {
-	$config = parse_ini_file('./config.ini', true);
-	if (isset($config['config_link'])) {
-		return parse_ini_file($config['config_link']['src']);
-	} elseif (isset($config['dbconfig'])) {
-		return $config['dbconfig'];
-	} else {
-		die("Error in config.ini: 'config_link' or 'dbconfig' segment required.\n");
-	}
-}
-
-function database(): Database {
-    return new Database(load_db_config());
-}
-
-function load_test_db_config(): array {
-	$config = load_db_config();
-	$config['db_name'] = 'Maggy'.$config['db_name'];
-
-    return $config;
-}
-
-function load_test_db(): Database {
-	$database = database();
-
-	$db_dump = $database->dump_db_all();
-
-	$test_database = new Database(load_test_db_config());
-	$config = $test_database->config;
-
-	$test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
-	do {
-		$test_database->sql->store_result();
-	} while ($test_database->sql->next_result());
-
-	shell_exec("echo ".escapeshellarg($db_dump)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
-
-	return $test_database;
-}
-
 function help() {
 	echo "List of commands:\n";
 	echo "\thelp — show this message\n";
@@ -310,7 +270,7 @@ function rollback(Database $database, bool $view = false) {
 }
 
 function test(): bool {
-	$database = load_test_db();
+	$database = Database::test_db();
 
 	$db_schema = $database->dump_db_definitions();
 	$db_data   = $database->dump_db_data();
@@ -397,22 +357,22 @@ switch ($command) {
 		setup();
 		break;
 	case 'dump':
-		$database = database();
+		$database = Database::db();
 
 		echo $database->dump_db_all()."\n";
 		break;
 	case 'test:dump':
-		$database = load_test_db();
+		$database = Database::test_db();
 
 		echo $database->dump_db_all()."\n";
 		break;
 	case 'test:version':
-		$database = load_test_db();
+		$database = Database::test_db();
 
 		echo $database->get_version()."\n";
 		break;
 	case 'db:version':
-		$database = database();
+		$database = Database::db();
 
 		echo $database->get_version()."\n";
 		break;
@@ -424,12 +384,12 @@ switch ($command) {
 
 		if (!$view && !test()) break;
 
-		$database = database();
+		$database = Database::db();
 
 		echo migrate($database, $view);
 		break;
 	case 'rollback':
-		$database = database();
+		$database = Database::db();
 
 		$view = ($args[0] ?? '') == 'view';
 
