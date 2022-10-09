@@ -89,5 +89,4 @@ switch ($command) {
 		break;
 	default:
 		die("Unknown command `$command`. Type `maggy help` for more information.\n");
-		break;
 }

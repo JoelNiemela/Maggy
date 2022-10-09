@@ -51,7 +51,7 @@ class Database {
 
         if ($update == null) return 0;
 
-        return $update['version'];
+        return intval($update['version']);
     }
 
     private function dump_db_with_flags(string $flags): string {

@@ -55,12 +55,14 @@ class MaggyParser {
         }
     }
 
-    private function maggy_attribute(string $attribute, array $args): void {
+    private function maggy_attribute(string $attribute, array $args): ?string {
         switch ($attribute) {
             default:
                 echo "Error: Unknown Maggy attribute `--#$attribute`. Type `maggy help syntax` for more information.\n";
                 break;
         }
+
+        return null;
     }
 
     private function maggy_macro(string $macro, array $args): void {
