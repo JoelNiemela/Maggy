@@ -162,7 +162,6 @@ function maggy_macro(string $macro, array $args, &$output): void {
 
 function parse_args(string $args, string $head): array {
 	if (preg_match('/^(\s(?:"[^"]*"|\w+))*\s*$/', $args)) {
-		$matches;
 		preg_match_all('/"[^"]*"|\w+/', $args, $matches);
 		return $matches[0];
 	} else {
@@ -240,7 +239,6 @@ function parse_diff(string $diff, string $diff_down): array {
 
 	$hints = [];
 	foreach ($lines as $line) {
-		$matches;
 		if (preg_match("/^\+ CREATE TABLE `(?<name>[^`]+)`/", $line, $matches)) {
 			$name = $matches['name'];
 			if (preg_match("/(^|\n)\+ CREATE TABLE `$name`/", $diff_down)) {
