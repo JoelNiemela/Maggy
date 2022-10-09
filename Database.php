@@ -1,10 +1,10 @@
 <?php
 
 class Database {
-	public $sql;
-	public $config;
+	public mysqli $sql;
+	public array $config;
 
-	public function __construct($config) {
+	public function __construct(array $config) {
 		$this->config = $config;
 
 		$this->sql = new mysqli(
@@ -54,21 +54,21 @@ class Database {
         return $update['version'];
     }
 
-    private function dump_db_with_flags(string $flags) {
+    private function dump_db_with_flags(string $flags): string {
         $config = $this->config;
         $password = $config['password'] != '' ? "-p={$config['password']}" : '';
         return shell_exec("mysqldump {$flags} --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
     }
 
-    public function dump_db_all() {
+    public function dump_db_all(): string {
         return $this->dump_db_with_flags('--routines --events');
     }
 
-    public function dump_db_definitions() {
+    public function dump_db_definitions(): string {
         return $this->dump_db_with_flags('--no-data --routines --events');
     }
 
-    public function dump_db_data() {
+    public function dump_db_data(): string {
         return $this->dump_db_with_flags('--no-create-info');
     }
 

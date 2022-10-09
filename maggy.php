@@ -3,12 +3,12 @@
 
 require 'Database.php';
 
-function help() {
+function help(): void {
 	echo "List of commands:\n";
 	echo "\thelp — show this message\n";
 }
 
-function setup() {
+function setup(): void {
 	$has_config = file_exists('./config.ini');
 	$has_migrations = file_exists('./migration');
 
@@ -39,7 +39,7 @@ function setup() {
 	}
 }
 
-function maggy_segment(string $segment, array $args, &$output_segment, &$output, $db_name): void {
+function maggy_segment(string $segment, array $args, &$output_segment, &$output, string $db_name): void {
 	switch ($segment) {
 		case 'Up':
 			$output_segment = 'up';
@@ -82,7 +82,7 @@ function maggy_segment(string $segment, array $args, &$output_segment, &$output,
 	}
 }
 
-function maggy_attribute(string $attribute, array $args) {
+function maggy_attribute(string $attribute, array $args): void {
 	switch ($attribute) {
 		default:
 			echo "Error: Unknown Maggy attribute `--#$attribute`. Type `maggy help syntax` for more information.\n";
@@ -155,7 +155,7 @@ function parse_migration(string $migration_path, string $db_name): array {
 	return $output;
 }
 
-function get_migration_path(int $version) {
+function get_migration_path(int $version): string {
 	$dir = glob("./migration/*");
 	$files = array_values(
 		array_filter(
@@ -234,7 +234,7 @@ function parse_diff(string $diff, string $diff_down): array {
 	return $hints;
 }
 
-function migrate(Database $database, bool $view = false) {
+function migrate(Database $database, bool $view = false): ?string {
 	$version = $database->get_version();
 
 	$db_name = $database->config['db_name'];
@@ -249,12 +249,12 @@ function migrate(Database $database, bool $view = false) {
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 }
 
-function rollback(Database $database, bool $view = false) {
+function rollback(Database $database, bool $view = false): ?string {
 	$version = $database->get_version();
 
 	if ($version == 0) {
 		echo "Can't rollback: already at earliest version.\n";
-		return;
+		return null;
 	}
 
 	$db_name = $database->config['db_name'];
