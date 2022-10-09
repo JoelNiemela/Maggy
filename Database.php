@@ -54,22 +54,22 @@ class Database {
         return $update['version'];
     }
 
-    public function dump_db_all() {
+    private function dump_db_with_flags(string $flags) {
         $config = $this->config;
         $password = $config['password'] != '' ? "-p={$config['password']}" : '';
-        return shell_exec("mysqldump --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+        return shell_exec("mysqldump {$flags} --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+    }
+
+    public function dump_db_all() {
+        return $this->dump_db_with_flags('--routines --events');
     }
 
     public function dump_db_definitions() {
-        $config = $this->config;
-        $password = $config['password'] != '' ? "-p={$config['password']}" : '';
-        return shell_exec("mysqldump --no-data --routines --events --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+        return $this->dump_db_with_flags('--no-data --routines --events');
     }
 
     public function dump_db_data() {
-        $config = $this->config;
-        $password = $config['password'] != '' ? "-p={$config['password']}" : '';
-        return shell_exec("mysqldump --no-create-info --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+        return $this->dump_db_with_flags('--no-create-info');
     }
 
     private static function load_db_config(): array {
