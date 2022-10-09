@@ -33,7 +33,7 @@ function load_test_db(): Database {
 	$test_database = new Database(load_test_db_config());
 	$config = $test_database->config;
 
-	$result = $test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
+	$test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
 	do {
 		$test_database->sql->store_result();
 	} while ($test_database->sql->next_result());
