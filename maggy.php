@@ -18,19 +18,19 @@ function database(): Database {
     return new Database(load_db_config());
 }
 
-function test_database(): Database {
+function load_test_db_config(): array {
 	$config = load_db_config();
 	$config['db_name'] = 'Maggy'.$config['db_name'];
 
-    return new Database($config);
+    return $config;
 }
 
-function load_test_db() {
+function load_test_db(): Database {
 	$database = database();
 
 	$db_dump = $database->dump_db_all();
 
-	$test_database = test_database();
+	$test_database = new Database(load_test_db_config());
 	$config = $test_database->config;
 
 	$result = $test_database->sql->multi_query("DROP DATABASE {$config['db_name']}; CREATE DATABASE {$config['db_name']};");
