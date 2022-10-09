@@ -2,6 +2,7 @@
 <?php
 
 require 'Database.php';
+require 'MaggyParser.php';
 
 function help(): void {
 	echo "List of commands:\n";
@@ -37,122 +38,6 @@ function setup(): void {
 	if (!$has_migrations) {
 		mkdir('./migration');
 	}
-}
-
-function maggy_segment(string $segment, array $args, &$output_segment, &$output, string $db_name): void {
-	switch ($segment) {
-		case 'Up':
-			$output_segment = 'up';
-			break;
-		case 'Down':
-			$output_segment = 'down';
-			break;
-		case 'Version':
-			if (count($args) < 2) {
-				echo "Error: Expected two arguments (version, description). Type `maggy help syntax` for more information.\n";
-				break;
-			}
-
-			$version = $args[0];
-			$description = $args[1];
-
-			$version_global = <<<SQL
-			USE $db_name;
-			SQL;
-
-			$version_up = <<<SQL
-			INSERT INTO maggy_db_update (version, description)
-			VALUES (
-				$version,
-				$description
-			);\n
-			SQL;
-
-			$version_down = <<<SQL
-			DELETE FROM maggy_db_update WHERE version=$version;\n
-			SQL;
-
-			$output['global'] .= $version_global;
-			$output['up']     .= $version_up;
-			$output['down']   .= $version_down;
-			break;
-		default:
-			echo "Error: Unknown Maggy segment `--@$segment`. Type `maggy help syntax` for more information.\n";
-			break;
-	}
-}
-
-function maggy_attribute(string $attribute, array $args): void {
-	switch ($attribute) {
-		default:
-			echo "Error: Unknown Maggy attribute `--#$attribute`. Type `maggy help syntax` for more information.\n";
-			break;
-	}
-}
-
-function maggy_macro(string $macro, array $args, &$output): void {
-	switch ($macro) {
-		case 'Maggy':
-			maggy_macro('MaggyUp', $args, $output);
-			maggy_macro('MaggyDown', $args, $output);
-			break;
-		case 'MaggyUp':
-			$maggy_up = <<<SQL
-			CREATE TABLE IF NOT EXISTS maggy_db_update (
-				version INT NOT NULL,
-				description VARCHAR(255) NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-			);\n
-			SQL;
-
-			$output['up'] = $maggy_up . $output['up'];
-			break;
-		case 'MaggyDown':
-			$maggy_down = <<<SQL
-			DROP TABLE maggy_db_update;\n
-			SQL;
-
-			$output['down'] .= $maggy_down;
-			break;
-		default:
-			echo "Error: Unknown Maggy macro `--!$macro`. Type `maggy help syntax` for more information.\n";
-			break;
-	}
-}
-
-function parse_args(string $args, string $head): array {
-	if (preg_match('/^(\s(?:"[^"]*"|\w+))*\s*$/', $args)) {
-		preg_match_all('/"[^"]*"|\w+/', $args, $matches);
-		return $matches[0];
-	} else {
-		echo "Syntax Error: Invalid argument list in `$head$args`. Type `maggy help syntax` for more information.\n";
-		return [];
-	}
-}
-
-function parse_migration(string $migration_path, string $db_name): array {
-	$lines = file($migration_path);
-	$segment = 'global';
-	$output = ['global' => '', 'up' => '', 'down' => ''];
-	$attributes = [];
-	foreach ($lines as $line) {
-		$args = [];
-		if (preg_match('/--@(?<segment>\w+)(?<args>.*)$/', $line, $args)) {
-			$segment_args = parse_args($args['args'], "--@{$args['segment']}");
-			maggy_segment($args['segment'], $segment_args, $segment, $output, $db_name);
-		} elseif (preg_match('/--#(?<attribute>\w+)(?<args>.*)$/', $line, $args)) {
-			$attribute_args = parse_args($args['args'], "--#{$args['attribute']}");
-			$attributes[] = maggy_attribute($args['attribute'], $attribute_args);
-		} elseif (preg_match('/--!(?<macro>\w+)(?<args>.*)$/', $line, $args)) {
-			$macro_args = parse_args($args['args'], "--!{$args['macro']}");
-			maggy_macro($args['macro'], $macro_args, $output);
-		} else {
-			$output[$segment] .= $line;
-			$attributes = [];
-		}
-	}
-
-	return $output;
 }
 
 function get_migration_path(int $version): string {
@@ -238,7 +123,8 @@ function migrate(Database $database, bool $view = false): ?string {
 	$version = $database->get_version();
 
 	$db_name = $database->config['db_name'];
-	$migration = parse_migration(get_migration_path($version), $db_name);
+    $maggy_parser = new MaggyParser(get_migration_path($version), $db_name);
+    $migration = $maggy_parser->parse_migration();
 
 	$sql = $migration['global'] . $migration['up'];
 
@@ -247,6 +133,8 @@ function migrate(Database $database, bool $view = false): ?string {
 	$config = $database->config;
 
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+
+    return null;
 }
 
 function rollback(Database $database, bool $view = false): ?string {
@@ -258,7 +146,8 @@ function rollback(Database $database, bool $view = false): ?string {
 	}
 
 	$db_name = $database->config['db_name'];
-	$migration = parse_migration(get_migration_path($version - 1), $db_name);
+    $maggy_parser = new MaggyParser(get_migration_path($version - 1), $db_name);
+	$migration = $maggy_parser->parse_migration();
 
 	$sql = $migration['global'] . $migration['down'];
 
@@ -267,6 +156,8 @@ function rollback(Database $database, bool $view = false): ?string {
 	$config = $database->config;
 
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
+
+    return null;
 }
 
 function test(): bool {

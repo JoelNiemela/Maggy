@@ -57,7 +57,15 @@ class Database {
     private function dump_db_with_flags(string $flags): string {
         $config = $this->config;
         $password = $config['password'] != '' ? "-p={$config['password']}" : '';
-        return shell_exec("mysqldump {$flags} --compact -h {$config['host']} -u {$config['user']} $password {$config['db_name']}");
+        $db_connection = "-h {$config['host']} -u {$config['user']} $password {$config['db_name']}";
+        $command = "mysqldump {$flags} --compact {$db_connection}";
+
+        $output = [];
+        if (exec($command, $output, $result_code) === false || $result_code != 0) {
+            throw new ErrorException('Failed to dump database.');
+        }
+
+        return implode("\n", $output);
     }
 
     public function dump_db_all(): string {
