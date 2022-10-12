@@ -6,7 +6,7 @@ function get_migration_path(int $version): string {
 		array_filter(
 			$dir,
 			fn($f) =>
-				preg_match("/patch_$version(_.*?)?\.sql\.maggy$/", $f)
+				preg_match("/from_0*$version(_.*?)?\.sql\.maggy$/", $f)
 		)
 	);
 
