@@ -6,7 +6,7 @@ function help(): void {
 }
 
 function maggy_version(): void {
-    echo "Maggy v0.1.1-alpha\n";
+	echo "Maggy v0.1.1-alpha\n";
 }
 
 function setup(): void {
@@ -44,8 +44,8 @@ function migrate(Database $database, bool $view = false): ?string {
 	$version = $database->get_version();
 
 	$db_name = $database->config['db_name'];
-    $maggy_parser = new MaggyParser(get_migration_path($version), $db_name);
-    $migration = $maggy_parser->parse_migration();
+	$maggy_parser = new MaggyParser(get_migration_path($version), $db_name);
+	$migration = $maggy_parser->parse_migration();
 
 	$sql = $migration['global'] . $migration['up'];
 
@@ -55,7 +55,7 @@ function migrate(Database $database, bool $view = false): ?string {
 
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 
-    return null;
+	return null;
 }
 
 function rollback(Database $database, bool $view = false): ?string {
@@ -67,7 +67,7 @@ function rollback(Database $database, bool $view = false): ?string {
 	}
 
 	$db_name = $database->config['db_name'];
-    $maggy_parser = new MaggyParser(get_migration_path($version - 1), $db_name);
+	$maggy_parser = new MaggyParser(get_migration_path($version - 1, rollback: true), $db_name);
 	$migration = $maggy_parser->parse_migration();
 
 	$sql = $migration['global'] . $migration['down'];
@@ -78,7 +78,7 @@ function rollback(Database $database, bool $view = false): ?string {
 
 	shell_exec("echo ".escapeshellarg($sql)." | mysql --user=\"{$config['user']}\" --database=\"{$config['db_name']}\"");
 
-    return null;
+	return null;
 }
 
 function test(): bool {
