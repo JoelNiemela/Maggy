@@ -1,18 +1,22 @@
 <?php
 
-function get_migration_path(int $version): string {
+function get_migration_path(int $version, bool $rollback = false): string {
 	$dir = glob("./migration/*");
 	$files = array_values(
 		array_filter(
 			$dir,
 			fn($f) =>
-				preg_match("/from_0*$version(_.*?)?\.sql\.maggy$/", $f)
+				preg_match("/\/from_0*$version(_.*?)?\.sql\.maggy$/", $f)
 		)
 	);
 
 	if (count($files) != 1) {
 		if (count($files) == 0) {
-			echo "Nothing to migrate; already at version $version.\n";
+			if ($rollback) {
+				echo "Error: Couldn't find migration file from version $version.\n";
+			} else {
+				echo "Nothing to migrate; already at version $version.\n";
+			}
 		} else {
 			echo "Error: Multiple files for migration version $version:\n";
 			foreach ($files as $file) {
