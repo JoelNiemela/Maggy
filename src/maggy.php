@@ -40,6 +40,10 @@ switch ($command) {
 			help();
 			break;
 		}
+		if (isset($flags['version']) || isset($flags['v'])) {
+			maggy_version();
+			break;
+		}
 		break;
 	case 'help':
 		help();

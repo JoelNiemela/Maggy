@@ -5,6 +5,10 @@ function help(): void {
 	echo "\thelp — show this message\n";
 }
 
+function maggy_version(): void {
+    echo "Maggy v0.1.1-alpha\n";
+}
+
 function setup(): void {
 	$has_config = file_exists('./config.ini');
 	$has_migrations = file_exists('./migration');
